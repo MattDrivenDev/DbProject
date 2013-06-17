@@ -1,2 +1,8 @@
 _release/
 _develop/
+tools/
+packages/
+bin/
+obj/
+
+*.suo
