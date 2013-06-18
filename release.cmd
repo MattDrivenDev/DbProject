@@ -1,1 +1,9 @@
 @ECHO OFF
+
+ECHO ENSURING RELEASE DIRECTORY EXISTS...
+IF NOT EXIST "_release" (
+	MKDIR "_release"
+)
+
+ECHO GENERATING DATABASE RELEASE SCRIPTS...
+"tools\FAKE\tools\FAKE.exe" "release.fsx"
