@@ -1,23 +1,38 @@
-#I @"tools/FAKE/tools/"
-#r @"FakeLib.dll"
+#r @"tools/FAKE/tools/FakeLib.dll"
+#load "helpers.fsx"
 
 open System
 open System.IO
 open System.Text
 open Fake
+open Helpers
 
-let SemVer fileinfo = 
-    use reader = (fileinfo:FileInfo).OpenText()
-    let semVer = reader.ReadToEnd()
-    semVer
+let mutable version    = ""
+let mutable releaseDir = ""
 
-let SqlScript fileinfo sql = 
-    use writer = (fileinfo:FileInfo).CreateText()
-    writer.Write((sql:string))
-
-Target "GenerateReleaseScripts" (fun _ ->    
-    let version = FileInfo("_develop/version.txt") |> SemVer    
-    "some sql" |> SqlScript (FileInfo((sprintf "_release/deploy.%s.sql" version)))
+Target "LoadVersion" (fun _ ->
+    match (TryReadFile "_develop/version.txt" >>= TrySemanticVersion) with
+    | Success (SemanticVersion semver) ->
+        version <- semver
+        traceImportant (sprintf "Generating release '%s'" version)
+    | Failure error -> failwith error
 )
 
-Run "GenerateReleaseScripts"
+Target "CreateReleaseDir" (fun _ ->
+    match (TrySubDirectories "_relfease") with
+    | Success (maybeArray) ->
+        match maybeArray with
+        | None -> releaseDir <- sprintf "0001_%s" version
+        | Some array -> releaseDir <- ""
+    | Failure error -> failwith error
+)
+
+Target "GenerateRelease" (fun _ ->
+    traceImportant "Generating database release..."
+)
+
+"LoadVersion" 
+    ==> "CreateReleaseDir"
+    ==> "GenerateRelease"
+
+Run "GenerateRelease"
