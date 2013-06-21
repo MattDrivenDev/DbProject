@@ -9,16 +9,51 @@ open Helpers
 
 let mutable version    = ""
 let mutable releaseDir = ""
+let mutable sqlFile    = ""
 
-Target "LoadVersion" (fun _ ->
-    match (TryReadFile "_develop/version.txt" >>= TrySemanticVersion) with
-    | Success (SemanticVersion semver) ->
-        version <- semver
-        traceImportant (sprintf "Generating release '%s'" version)    
-    | Failure error -> failwith error
+let failStepWithTrace step error =
+    traceError error
+    trace ""
+    failwith (sprintf "Error in '%s'" step)
+
+/// <summary>
+/// Because ASCII art matters.
+/// </summary>
+Target "Start" (fun _ ->
+    trace          ""
+    traceImportant "          _                           _ _     "
+    traceImportant "         | |                         | | |    "
+    traceImportant " _ __ ___| | ___  __ _ ___  ___    __| | |__  "
+    traceImportant "| '__/ _ \ |/ _ \/ _` / __|/ _ \  / _` | '_ \ "
+    traceImportant "| | |  __/ |  __/ (_| \__ \  __/ | (_| | |_) |"
+    traceImportant "|_|  \___|_|\___|\__,_|___/\___|  \__,_|_.__/ "
+    trace          ""
 )
 
-Target "CreateReleaseDir" (fun _ ->       
+/// <summary>
+/// Load the version information from the develop branch, and just make
+/// sure that it is 'basically' valid semantic version format.
+/// </summary>
+Target "LoadVersion" (fun _ ->
+    
+    let LoadVersion = 
+        TryReadFile "_develop/version.txt"
+        >>= TrySemanticVersion
+
+    match LoadVersion with
+    | Success (SemanticVersion semver) ->
+        version <- semver
+        traceImportant (sprintf "Generating release '%s'" version)  
+          
+    | Failure error -> failStepWithTrace "LoadVersion" error
+)
+
+/// <summary>
+/// Works out what the name of the next release directory should be, based
+/// on the version and previous releases - and then creates it.
+/// </summary>
+Target "CreateReleaseDir" (fun _ ->    
+   
     let getNextPrefix maybeArray =         
         match (maybeArray:'a array option) with
         | None -> Success 1
@@ -27,27 +62,67 @@ Target "CreateReleaseDir" (fun _ ->
     let getReleasePath prefix = 
         sprintf "_release/%s_%s" prefix version |> Success
     
-    let result = 
+    let CreateReleaseDir = 
         TrySubDirectories "_release"
         >>= getNextPrefix
         >>= TryMakeNumberString 4
         >>= getReleasePath
         >>= TryMakeDirectory
 
-    match result with
+    match CreateReleaseDir with
     | Success path -> 
         releaseDir <- path
         traceImportant (sprintf "Release dir '%s'" releaseDir)
 
-    | Failure error -> traceError error
+    | Failure error -> failStepWithTrace "CreateReleaseDir" error
 )
 
+/// <summary>
+/// Compiles the individual sql scripts in the develop branch into a single
+/// transactional sql script in the release.
+/// </summary>
+Target "CompileSql" (fun _ ->
+
+    let transform = ""
+
+    let CompileSql = 
+        TryReadFile "release-template.sql"
+        >>= ValidateSqlTemplate
+        >>= ParseSqlTemplate
+        >>= ApplySqlTransform transform
+        >>= TryWriteFile (sprintf "%s/deploy.sql")
+
+    match CompileSql with
+    | Success filename ->
+        sqlFile <- filename
+        traceImportant (sprintf "SQL script compiled '%s'" sqlFile)
+
+    | Failure error -> failStepWithTrace "CompileSql" error
+)
+
+/// <summary>
+/// Draws up a little report of the database release.
+/// </summary>
 Target "GenerateRelease" (fun _ ->
-    traceImportant "Generating database release..."
+
+    trace          "" 
+    traceImportant "---------------------------------------------------------------------"
+    traceImportant "DATABASE RELEASE REPORT"
+    traceImportant "---------------------------------------------------------------------"
+    traceImportant "  ACTIVITY          RESULT"
+    traceImportant "  --------          ------"
+    traceImportant (sprintf "  Version:          %s" version)
+    traceImportant (sprintf "  Release dir:      %s" releaseDir)
+    traceImportant (sprintf "  SQL script:       %s" sqlFile)
+    traceImportant "---------------------------------------------------------------------"
+    trace          "" 
 )
 
-"LoadVersion" 
-    ==> "CreateReleaseDir"
-    ==> "GenerateRelease"
+
+"Start"
+==> "LoadVersion" 
+==> "CreateReleaseDir"
+==> "CompileSql"
+==> "GenerateRelease"
 
 Run "GenerateRelease"

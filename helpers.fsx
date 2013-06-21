@@ -73,6 +73,12 @@ let TryReadFile filename =
         Success (reader.ReadToEnd())
     | false -> Failure (sprintf "Error, '%s' does not exist" filename)
 
+let TryWriteFile filename contents = 
+    try
+        failwith "Error, 'TryWriteFile' isn't implemented yet."
+    with
+    | ex -> Failure ex.Message
+
 /// <summary>
 /// Try's to get name of all the sub-directories, provided a path
 /// </summary>
@@ -113,3 +119,54 @@ let TryMakeNumberString length n =
         Success (PrefixString "0" 4 nStr)
     | false -> 
         Failure (sprintf "Error, '%i' is too large a number to make into a '%i' length string" n length)
+
+type SqlTemplate = { TemplateContent: string; ScriptBlock: string }
+
+type SqlScript = { ScriptContent: string; ScriptName: string; }
+
+type SqlTransform = {
+    DbName      : string
+    Version     : SemanticVersion
+    Timestamp   : DateTime
+    MachineName : string
+    UserName    : string
+    Scripts     : SqlScript array
+}
+
+let GetScriptBlockIndices (templateContent:string) = 
+    try
+        let scriptBlockBeginIndex   = templateContent.IndexOf("$foreach_script_begin$")
+        let scriptBlockContentIndex = templateContent.IndexOf("$script_content$")
+        let scriptBlockEndIndex     = templateContent.IndexOf("$foreach_script_end$")
+        Success (scriptBlockBeginIndex, scriptBlockContentIndex, scriptBlockEndIndex)
+    with
+    | ex -> Failure ex.Message
+
+let EnsureScriptBlockExists templateContent = 
+    let help = "Error, SqlTemplate does not contain all 3 '$foreach_script_begin$', '$foreach_script_end$' with an '$script_content$' inbetween."
+    let ensure (beginIndex, contentIndex, endIndex) =        
+        if beginIndex >=0 && contentIndex >= 0 && endIndex >= 0 
+        then Success templateContent else Failure help
+
+    GetScriptBlockIndices templateContent >>= ensure
+
+let EnsureScriptBlocksInCorrectOrder templateContent =     
+    let ensure (beginIndex, contentIndex, endIndex) = 
+        let map = beginIndex < contentIndex, contentIndex < endIndex
+        match map with
+        | true, true   -> Success templateContent
+        | false, true  -> Failure "Error, '$foreach_script_begin$' must come before '$script_content$'"
+        | true, false  -> Failure "Error, '$script_content$' must come before '$foreach_script_end$'"
+        | false, false -> Failure "Error, you've really messed up the template!"
+
+    GetScriptBlockIndices templateContent >>= ensure
+
+let ValidateSqlTemplate templateContent = 
+    EnsureScriptBlockExists templateContent
+    >>= EnsureScriptBlocksInCorrectOrder 
+
+let ParseSqlTemplate templateContent = 
+    Failure "Error, 'ParseSqlTemplate' isn't implemented yet."
+
+let ApplySqlTransform transform template = 
+    Failure "Error, 'ApplySqlTransform' isn't implemented yet."
