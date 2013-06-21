@@ -30,6 +30,14 @@ let (>>=) x f = bind f x
 /// Wrapped-String-Type that represents a valid semantic version.
 /// </summary>
 type SemanticVersion = SemanticVersion of string
+
+/// <summary>
+/// Prefixes a given string with a specified prefix to a maximum length.
+/// </summary>
+let rec PrefixString prefix max str = 
+    if (str:string).Length >= max then str
+    else
+        PrefixString prefix max (sprintf "%s%s" prefix str)
     
 /// <summary>
 /// True if a given char exists in an array of valid chars.
@@ -40,6 +48,20 @@ let ExpectedChar validChars c = validChars |> Array.exists ((=)c)
 /// Converts an array into an optional array, based on if it is empty or not.
 /// </summary>
 let MaybeArray xs = if Array.isEmpty xs then None else Some xs
+
+/// <summary>
+/// Try's to create a new directory at a specified path.
+/// </summary>
+let TryMakeDirectory path = 
+    try
+        match Directory.Exists(path) with
+        | false ->
+            ignore (Directory.CreateDirectory(path))
+            Success path
+        | true ->
+            Failure (sprintf "Error, '%s' already exists" path)
+    with
+    | ex -> Failure ex.Message
 
 /// <summary>
 /// Try's to open and read a file as raw text (string)
@@ -80,3 +102,14 @@ let TrySemanticVersion str =
     match ContainsOnlyExpectedChars validChars str with
     | true -> Success (SemanticVersion str)
     | false -> Failure (sprintf "Error, '%s' is not a valid semantic version" str)
+
+/// <summary>
+/// Try's to make a string from a number with a specified length.
+/// </summary>
+let TryMakeNumberString length n =
+    let nStr = n.ToString()
+    match nStr.Length <= length with
+    | true -> 
+        Success (PrefixString "0" 4 nStr)
+    | false -> 
+        Failure (sprintf "Error, '%i' is too large a number to make into a '%i' length string" n length)
