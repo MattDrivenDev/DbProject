@@ -7,14 +7,10 @@ open System.Text
 open Fake
 open Helpers
 
+let dbName             = "DbProject"
 let mutable version    = ""
 let mutable releaseDir = ""
 let mutable sqlFile    = ""
-
-let failStepWithTrace step error =
-    traceError error
-    trace ""
-    failwith (sprintf "Error in '%s'" step)
 
 /// <summary>
 /// Because ASCII art matters.
@@ -83,14 +79,38 @@ Target "CreateReleaseDir" (fun _ ->
 /// </summary>
 Target "CompileSql" (fun _ ->
 
-    let transform = ""
+    let developedScripts = 
+        match Files "*.sql" "_develop" with
+        | Success maybeArray ->
+            match maybeArray with
+            | Some scripts ->
+                scripts 
+                |> Array.map (fun sql ->                                          
+                                  match TryReadFile (sprintf "_develop/%s" sql) with
+                                  | Success content -> Some ({ ScriptName = sql; ScriptContent = content; })
+                                  | Failure e -> None)
+                |> Array.fold (fun xs x -> 
+                                  match x with
+                                  | Some script -> script :: xs
+                                  | None -> xs) []
+            | None -> failStepWithTrace "CompileSql" "Error, no SQL scripts to compile into a release"
+        | Failure error -> failStepWithTrace "CompileSql" error
+
+    let transform = {
+        DbName      = dbName
+        Version     = SemanticVersion version
+        Timestamp   = DateTime.Now
+        MachineName = Environment.MachineName
+        UserName    = Environment.UserName
+        Scripts     = developedScripts
+    }
 
     let CompileSql = 
         TryReadFile "release-template.sql"
         >>= ValidateSqlTemplate
         >>= ParseSqlTemplate
         >>= ApplySqlTransform transform
-        >>= TryWriteFile (sprintf "%s/deploy.sql")
+        >>= TryWriteFile (sprintf "%s/deploy.sql" releaseDir)
 
     match CompileSql with
     | Success filename ->

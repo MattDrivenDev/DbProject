@@ -8,18 +8,28 @@ open Fake
 /// <summary>
 /// Context for Success/Failure of activities.
 /// </summary>
+let failStepWithTrace step error =
+    traceError error
+    trace ""
+    failwith (sprintf "Error in '%s'" step)
+
+/// <summary>
+/// Context for Success/Failure of activities.
+/// </summary>
 type Result<'TSuccess, 'TFailure> = 
     | Success of 'TSuccess
     | Failure of 'TFailure
     
 /// <summary>
-/// Binds the output of one Success/Failure to another.
+/// Binds a ('a -> Result<'b, 'c>) -> ('a -> Result<'b, 'c>)
 /// </summary>
 let bind f =
     function input ->
              match input with
              | Success a -> f a
              | Failure b -> Failure b
+
+let replace oldValue newValue str = (str:string).Replace(oldValue=oldValue, newValue=newValue)
     
 /// <summary>
 /// 'bind' as an operator.
@@ -30,6 +40,8 @@ let (>>=) x f = bind f x
 /// Wrapped-String-Type that represents a valid semantic version.
 /// </summary>
 type SemanticVersion = SemanticVersion of string
+
+let SemanticVersionStr (SemanticVersion version) = version
 
 /// <summary>
 /// Prefixes a given string with a specified prefix to a maximum length.
@@ -48,6 +60,8 @@ let ExpectedChar validChars c = validChars |> Array.exists ((=)c)
 /// Converts an array into an optional array, based on if it is empty or not.
 /// </summary>
 let MaybeArray xs = if Array.isEmpty xs then None else Some xs
+
+let doesntExist path = Failure (sprintf "Error, '%s' doesn't exist" path)    
 
 /// <summary>
 /// Try's to create a new directory at a specified path.
@@ -71,11 +85,16 @@ let TryReadFile filename =
     | true ->
         let reader = FileInfo(filename).OpenText()
         Success (reader.ReadToEnd())
-    | false -> Failure (sprintf "Error, '%s' does not exist" filename)
+    | false -> filename |> doesntExist
 
-let TryWriteFile filename contents = 
+let TryWriteFile filename (contents:string) = 
     try
-        failwith "Error, 'TryWriteFile' isn't implemented yet."
+        use writer = new StreamWriter(path=filename)
+        writer.Write(contents, true)
+        writer.Flush()
+        writer.Close() 
+
+        Success filename
     with
     | ex -> Failure ex.Message
 
@@ -89,7 +108,16 @@ let TrySubDirectories path =
         |> Array.map (fun dir -> dir.Name)
         |> MaybeArray
         |> Success
-    | false -> Failure (sprintf "Error, '%s' does not exist" path)
+    | false -> path |> doesntExist
+
+let Files pattern path = 
+    match Directory.Exists(path) with
+    | true -> 
+        DirectoryInfo(path).GetFiles(searchPattern=pattern)
+        |> Array.map (fun file -> file.Name)
+        |> MaybeArray
+        |> Success
+    | false -> path |> doesntExist
 
 /// <summary>
 /// True if a given char exists in an array of valid chars.
@@ -120,19 +148,31 @@ let TryMakeNumberString length n =
     | false -> 
         Failure (sprintf "Error, '%i' is too large a number to make into a '%i' length string" n length)
 
+/// <summary>
+/// Type to represent a SQL deploy script template.
+/// </summary>
 type SqlTemplate = { TemplateContent: string; ScriptBlock: string }
 
+/// <summary>
+/// Type to represent a developed SQL script ready for deployment.
+/// </summary>
 type SqlScript = { ScriptContent: string; ScriptName: string; }
 
+/// <summary>
+/// Type to represent details of a transformation from a SQL template -> SQL deployment script.
+/// </summary>
 type SqlTransform = {
     DbName      : string
     Version     : SemanticVersion
     Timestamp   : DateTime
     MachineName : string
     UserName    : string
-    Scripts     : SqlScript array
+    Scripts     : SqlScript list
 }
 
+/// <summary>
+/// Gets each index of each part of the repeatable script block from a SQL template.
+/// </summary>
 let GetScriptBlockIndices (templateContent:string) = 
     try
         let scriptBlockBeginIndex   = templateContent.IndexOf("$foreach_script_begin$")
@@ -142,6 +182,9 @@ let GetScriptBlockIndices (templateContent:string) =
     with
     | ex -> Failure ex.Message
 
+/// <summary>
+/// Ensures that a SQL template contains all 3 required markers for the repeatable script block.
+/// </summary>
 let EnsureScriptBlockExists templateContent = 
     let help = "Error, SqlTemplate does not contain all 3 '$foreach_script_begin$', '$foreach_script_end$' with an '$script_content$' inbetween."
     let ensure (beginIndex, contentIndex, endIndex) =        
@@ -150,6 +193,9 @@ let EnsureScriptBlockExists templateContent =
 
     GetScriptBlockIndices templateContent >>= ensure
 
+/// <summary>
+/// Ensures that a SQL template has each of the 3 required markers in the correct order.
+/// </summary>
 let EnsureScriptBlocksInCorrectOrder templateContent =     
     let ensure (beginIndex, contentIndex, endIndex) = 
         let map = beginIndex < contentIndex, contentIndex < endIndex
@@ -161,12 +207,51 @@ let EnsureScriptBlocksInCorrectOrder templateContent =
 
     GetScriptBlockIndices templateContent >>= ensure
 
+/// <summary>
+/// Performs some basic validation on a SQL template.
+/// </summary>
 let ValidateSqlTemplate templateContent = 
     EnsureScriptBlockExists templateContent
     >>= EnsureScriptBlocksInCorrectOrder 
 
+/// <summary>
+/// Turns a raw SQL template (string) into the SqlTemplate type.
+/// </summary>
 let ParseSqlTemplate templateContent = 
-    Failure "Error, 'ParseSqlTemplate' isn't implemented yet."
+    let scriptBlock (beginIndex, contentIndex, endIndex) =                 
+        try
+            (templateContent:string).Substring(beginIndex, (endIndex + 20 - beginIndex))
+            |> Success
+        with
+        | ex -> Failure ex.Message        
 
+    match GetScriptBlockIndices templateContent >>= scriptBlock with
+    | Success block -> Success ({ TemplateContent = templateContent; ScriptBlock = block; })
+    | Failure error -> Failure error
+
+/// <summary>
+/// Applies a SqlTransform to a SqlTemplate.
+/// </summary>
 let ApplySqlTransform transform template = 
-    Failure "Error, 'ApplySqlTransform' isn't implemented yet."
+
+    let applyToScript sql = 
+        template.ScriptBlock
+        |> replace "$foreach_script_begin$" ""
+        |> replace "$script_name$" sql.ScriptName
+        |> replace "$script_content$" sql.ScriptContent
+        |> replace "$foreach_script_end$" ""
+
+    let mergedSql = 
+        transform.Scripts
+        |> List.map applyToScript
+        |> List.fold (fun fullSql sql -> sql + fullSql) ""
+    
+    let applyTransformToTemplate =     
+        replace "$DbName$" transform.DbName
+        >> replace "$Version$" (SemanticVersionStr transform.Version)
+        >> replace "$ReleaseDate$" (transform.Timestamp.ToShortDateString())
+        >> replace "$ReleaseMachine$" transform.MachineName
+        >> replace "$ReleaseUser$" transform.UserName
+        >> replace template.ScriptBlock mergedSql
+
+    applyTransformToTemplate template.TemplateContent |> Success

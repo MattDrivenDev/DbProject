@@ -2,9 +2,8 @@
 
 IF NOT EXIST "_develop" (
 
-ECHO Creating a new 'develop' branch...
-MKDIR "_develop"
-	
+git clone "git@github.com:saxonmatt/DbProject.git" "_develop"
+
 ) ELSE (
 
 ECHO Cannot create a new 'develop' branch before releasing the current one.
