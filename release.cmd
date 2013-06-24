@@ -18,5 +18,12 @@ cd "_release"
 git checkout release
 cd ..
 
-ECHO GENERATING DATABASE RELEASE SCRIPTS...
-"tools\FAKE\tools\FAKE.exe" "release.fsx"
+IF NOT [%1] == [] (
+	ECHO GENERATING DATABASE RELEASE SCRIPTS...
+	"tools\FAKE\tools\FAKE.exe" "release.fsx" "target=%1"
+) ELSE (
+	ECHO GENERATING DATABASE RELEASE SCRIPTS...
+	"tools\FAKE\tools\FAKE.exe" "release.fsx"
+)
+
+EXIT /B %errorlevel%

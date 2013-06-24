@@ -129,6 +129,20 @@ let Files pattern path =
     | false -> path |> doesntExist
 
 /// <summary>
+/// Deletes **all** files in a given path.
+/// </summary>
+let DeleteAllFiles path =
+    match Files "*.*" path with
+    | Success maybeFiles ->
+        match maybeFiles with
+        | Some files ->
+            files |> Array.iter (fun file -> Fake.FileHelper.DeleteFile (sprintf "%s/%s" path file))
+            Success (sprintf "Done, %i files deleted." (files |> Array.length))
+        | None ->
+            Success "Done, but there were no files to be deleted."
+    | Failure error -> Failure error
+
+/// <summary>
 /// True if a given char exists in an array of valid chars.
 /// </summary>
 let ContainsOnlyExpectedChars validChars str = 

@@ -49,6 +49,8 @@ Target "LoadVersion" (fun _ ->
 /// on the version and previous releases - and then creates it.
 /// </summary>
 Target "CreateReleaseDir" (fun _ ->    
+
+    let releaseSubdirectories = TrySubDirectoriesWithFilter (fun (d:DirectoryInfo) -> not (d.Name.StartsWith(".")))
    
     let getNextPrefix maybeArray =         
         match (maybeArray:'a array option) with
@@ -57,9 +59,9 @@ Target "CreateReleaseDir" (fun _ ->
 
     let getReleasePath prefix = 
         sprintf "_release/%s_%s" prefix version |> Success
-    
+
     let CreateReleaseDir = 
-        TrySubDirectoriesWithFilter (fun (d:DirectoryInfo) -> not (d.Name.StartsWith("."))) "_release"
+        releaseSubdirectories "_release"
         >>= getNextPrefix
         >>= TryMakeNumberString 4
         >>= getReleasePath
@@ -138,11 +140,48 @@ Target "GenerateRelease" (fun _ ->
     trace          "" 
 )
 
+Target "ResetMasterBranchForDevelopment" (fun _ -> 
+    
+    let pathToMaster = "_develop"
+    match DeleteAllFiles pathToMaster with
+    | Success msg -> traceImportant msg
+    | Failure error -> failStepWithTrace "ResetMasterBranchForDevelopment" error
+
+    let versionFilename = "_develop/version.txt"
+    let versionTemplate = "x.x.x.x"
+    match TryWriteFile versionFilename versionTemplate with
+    | Success filename -> traceImportant (sprintf "New version template file '%s' created" filename)
+    | Failure error -> failStepWithTrace "ResetMasterBranchForDevelopment" error
+
+    Git.CommandHelper.gitCommand pathToMaster "add ."
+    Git.CommandHelper.gitCommand pathToMaster (sprintf "commit -m \"Reset Master Branch after releasing version '%s'.\"" version)
+    Git.CommandHelper.gitCommand pathToMaster "push origin master"
+)
+
+/// <summary>
+/// Draws up a little report of the CI-build database release - which does all the operations
+/// on the git repo.
+/// </summary>
+Target "CI-Build" (fun _ ->
+
+    trace          "" 
+    traceImportant "---------------------------------------------------------------------"
+    traceImportant "DATABASE CI-BUILD RELEASE REPORT"
+    traceImportant "---------------------------------------------------------------------"
+    traceImportant "  ACTIVITY          RESULT"
+    traceImportant "  --------          ------"
+    traceImportant "---------------------------------------------------------------------"
+    trace          "" 
+)
+
+
 
 "Start"
 ==> "LoadVersion" 
 ==> "CreateReleaseDir"
 ==> "CompileSql"
-==> "GenerateRelease"
+==> "GenerateRelease" // developer run ends here, CI (eg. Team City continues)
+==> "ResetMasterBranchForDevelopment"
+==> "CI-Build"
 
-Run "GenerateRelease"
+RunTargetOrDefault "GenerateRelease"
