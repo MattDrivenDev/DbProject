@@ -84,7 +84,9 @@ let TryReadFile filename =
     match File.Exists(filename) with
     | true ->
         let reader = FileInfo(filename).OpenText()
-        Success (reader.ReadToEnd())
+        let content = reader.ReadToEnd()
+        reader.Close()
+        Success (content)
     | false -> filename |> doesntExist
 
 let TryWriteFile filename (contents:string) = 

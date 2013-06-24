@@ -140,6 +140,23 @@ Target "GenerateRelease" (fun _ ->
     trace          "" 
 )
 
+Target "CommitReleaseBranch" (fun _ ->
+
+    let pathToRelease = "_release"
+
+    Git.CommandHelper.gitCommand pathToRelease "add ."
+    Git.CommandHelper.gitCommand pathToRelease (sprintf "commit -m \"'%s' version '%s' generated.\"" dbName version)
+    Git.CommandHelper.gitCommand pathToRelease "push origin release"
+)
+
+Target "TagMasterBranch" (fun _ ->
+
+    let pathToMaster = "_develop"
+
+    Git.CommandHelper.gitCommand pathToMaster (sprintf "tag -a %s-%s -m \"Tagging off version '%s'.\"" dbName version version)
+    Git.CommandHelper.gitCommand pathToMaster "push --tags"
+)
+
 Target "ResetMasterBranchForDevelopment" (fun _ -> 
     
     let pathToMaster = "_develop"
@@ -154,7 +171,8 @@ Target "ResetMasterBranchForDevelopment" (fun _ ->
     | Failure error -> failStepWithTrace "ResetMasterBranchForDevelopment" error
 
     Git.CommandHelper.gitCommand pathToMaster "add ."
-    Git.CommandHelper.gitCommand pathToMaster (sprintf "commit -m \"Reset Master Branch after releasing version '%s'.\"" version)
+    Git.CommandHelper.gitCommand pathToMaster "rm *.sql"
+    Git.CommandHelper.gitCommand pathToMaster (sprintf "commit -m \"Cleaned 'master' branch after releasing version '%s'.\"" version)
     Git.CommandHelper.gitCommand pathToMaster "push origin master"
 )
 
@@ -181,6 +199,8 @@ Target "CI-Build" (fun _ ->
 ==> "CreateReleaseDir"
 ==> "CompileSql"
 ==> "GenerateRelease" // developer run ends here, CI (eg. Team City continues)
+==> "CommitReleaseBranch"
+==> "TagMasterBranch"
 ==> "ResetMasterBranchForDevelopment"
 ==> "CI-Build"
 
