@@ -59,7 +59,7 @@ Target "CreateReleaseDir" (fun _ ->
         sprintf "_release/%s_%s" prefix version |> Success
     
     let CreateReleaseDir = 
-        TrySubDirectories "_release"
+        TrySubDirectoriesWithFilter (fun (d:DirectoryInfo) -> not (d.Name.StartsWith("."))) "_release"
         >>= getNextPrefix
         >>= TryMakeNumberString 4
         >>= getReleasePath

@@ -99,17 +99,26 @@ let TryWriteFile filename (contents:string) =
     | ex -> Failure ex.Message
 
 /// <summary>
-/// Try's to get name of all the sub-directories, provided a path
+/// Try's to get a filtered list of sub-directories at a given path.
 /// </summary>
-let TrySubDirectories path = 
+let TrySubDirectoriesWithFilter (filter: DirectoryInfo -> bool) path = 
     match Directory.Exists(path) with
     | true -> 
         DirectoryInfo(path).GetDirectories()
-        |> Array.map (fun dir -> dir.Name)
+        |> Array.filter filter
+        |> Array.map (fun dir -> dir.Name)        
         |> MaybeArray
         |> Success
     | false -> path |> doesntExist
 
+/// <summary>
+/// Try's to get a list of all sub-directories at a given path.
+/// </summary>
+let TrySubDirectories = TrySubDirectoriesWithFilter (fun d -> true)
+
+/// <summary>
+/// Gets all files in a directory (non-recursive) that match a pattern
+/// </summary>
 let Files pattern path = 
     match Directory.Exists(path) with
     | true -> 
