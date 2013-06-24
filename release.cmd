@@ -18,3 +18,13 @@ IF NOT EXIST "_release" (
 
 ECHO GENERATING DATABASE RELEASE SCRIPTS...
 "tools\FAKE\tools\FAKE.exe" "release.fsx"
+
+ECHO CLEARING UP RELEASE BRANCH...
+IF EXIST "_release" (
+	RMDIR /Q /S "_release"
+)
+
+ECHO CLEARING UP MASTER BRANCH...
+IF EXIST "_develop" (
+	RMDIR /Q /S "_develop"
+)
