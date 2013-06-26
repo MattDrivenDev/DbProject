@@ -86,6 +86,7 @@ Target "CompileSql" (fun _ ->
         | Success maybeArray ->
             match maybeArray with
             | Some scripts ->
+                traceImportant (sprintf "%i SQL scripts found to create deployment." (scripts |> Array.length))
                 scripts 
                 |> Array.map (fun sql ->                                          
                                   match TryReadFile (sprintf "_develop/%s" sql) with

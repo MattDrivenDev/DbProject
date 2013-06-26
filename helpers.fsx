@@ -270,13 +270,13 @@ let ApplySqlTransform transform template =
         transform.Scripts
         |> List.map applyToScript
         |> List.fold (fun fullSql sql -> sql + fullSql) ""
-    
+            
     let applyTransformToTemplate =     
-        replace "$DbName$" transform.DbName
+        replace template.ScriptBlock mergedSql
+        >> replace "$DbName$" transform.DbName
         >> replace "$Version$" (SemanticVersionStr transform.Version)
         >> replace "$ReleaseDate$" (transform.Timestamp.ToShortDateString())
         >> replace "$ReleaseMachine$" transform.MachineName
         >> replace "$ReleaseUser$" transform.UserName
-        >> replace template.ScriptBlock mergedSql
 
     applyTransformToTemplate template.TemplateContent |> Success

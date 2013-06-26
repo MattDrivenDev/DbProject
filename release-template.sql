@@ -13,9 +13,17 @@
 
 SET IMPLICIT_TRANSACTIONS, NUMERIC_ROUNDABORT OFF;
 SET ANSI_NULLS, ANSI_PADDING, ANSI_WARNINGS, ARITHABORT, CONCAT_NULL_YIELDS_NULL, NOCOUNT, QUOTED_IDENTIFIER ON;
+GO
+SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 SET XACT_ABORT ON;
 
+BEGIN TRY
+BEGIN TRANSACTION trans_Deployment;
+
+
+
 $foreach_script_begin$
+
 ---------------------------------------------------------------------
 -- $script_name$
 ---------------------------------------------------------------------
@@ -23,6 +31,26 @@ GO
 
 $script_content$
 
+EXEC [dbo].[up_DeploymentLog_Insert] '$DbName$-$Version$', '$script_name$', 'SUCCESS', '$script_name$ was deployed successfully', SYSTEM_USER
+
+---------------------------------------------------------------------
+
 $foreach_script_end$
+
+
+
+GO
+COMMIT TRANSACTION trans_Deployment;
+
+EXEC [dbo].[up_Deployment_Insert] '$DbName$-$Version$', 'deploy.sql', 'N/A'
+
+END TRY
+BEGIN CATCH
+
+ROLLBACK TRANSACTION trans_Deployment;
+
+SELECT ERROR_NUMBER() AS [ErrorNumber], ERROR_SEVERITY() AS [ErrorSeverity], ERROR_STATE() AS [ErrorState], ERROR_MESSAGE() AS [ErrorMessage]
+
+END CATCH
 
 SET NOEXEC OFF;
